@@ -5,7 +5,7 @@ export default function Footer() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-gray-400">
             <span className="text-red-500">▶</span>
-            <span className="font-medium">StreamHub</span>
+            <span className="font-medium">xxxHubxxx</span>
           </div>
           <p className="text-sm text-gray-500">
             Built with Next.js • Powered by xvideos.com data

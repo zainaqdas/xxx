@@ -7,8 +7,8 @@ import Footer from '@/components/Footer';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'StreamHub - Video Streaming',
-  description: 'Browse and stream videos from across the web',
+  title: 'xxxHubxxx',
+  description: 'xxxHubxxx - Stream videos from across the web',
   icons: { icon: '/favicon.svg' },
 };
 

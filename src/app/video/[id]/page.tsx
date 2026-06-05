@@ -69,7 +69,7 @@ export default async function VideoPage({
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white mb-3">{detail.title}</h1>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
-          {detail.profile.name && (
+          {detail.profile.name && !['profiles', 'profile', 'channels', 'users'].includes(detail.profile.name.toLowerCase()) && (
             <a href={detail.profile.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-red-400 hover:text-red-300">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
               {detail.profile.name}

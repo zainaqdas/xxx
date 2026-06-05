@@ -22,7 +22,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 text-xl font-bold text-white" onClick={() => setMenuOpen(false)}>
             <span className="text-red-500">▶</span>
-            <span className="text-sm sm:text-xl">StreamHub</span>
+            <span className="text-sm sm:text-xl">xxxHubxxx</span>
           </Link>
 
           {/* Desktop nav */}
