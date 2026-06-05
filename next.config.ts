@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['got-scraping', 'cheerio'],
+  // No server external packages needed - using native Node.js modules
 };
 
 export default nextConfig;

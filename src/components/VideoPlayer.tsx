@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface VideoFiles {
   low?: string;
@@ -8,24 +8,38 @@ interface VideoFiles {
   HLS?: string;
 }
 
+interface VideoDetailsResult {
+  files: VideoFiles;
+  embedUrl: string;
+  thumbnailUrls?: string[];
+  title: string;
+  [key: string]: unknown;
+}
+
 export default function VideoPlayer({
-  files,
-  embedUrl,
+  files: initialFiles,
+  embedUrl: initialEmbedUrl,
   title,
   poster,
+  videoUrl,
 }: {
   files: VideoFiles;
   embedUrl: string;
   title: string;
   poster?: string;
+  videoUrl?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [files, setFiles] = useState(initialFiles);
+  const [embedUrl, setEmbedUrl] = useState(initialEmbedUrl);
   const mp4Source = files.high || files.low;
   const [useEmbed, setUseEmbed] = useState(!mp4Source);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState<'low' | 'high'>(files.high ? 'high' : 'low');
   const [currentSrc, setCurrentSrc] = useState(mp4Source || '');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshCount = useRef(0);
 
   useEffect(() => {
     if (videoRef.current && currentSrc) {
@@ -46,6 +60,37 @@ export default function VideoPlayer({
     setCurrentQuality(q);
     setCurrentSrc(files[q]!);
   };
+
+  // Fetch fresh video URLs from the server when the current ones expire
+  const refreshUrls = useCallback(async () => {
+    if (!videoUrl || refreshCount.current >= 2) return;
+    refreshCount.current += 1;
+    setIsRefreshing(true);
+
+    try {
+      const res = await fetch(`/api/video-details?url=${encodeURIComponent(videoUrl)}`);
+      const data = await res.json();
+
+      if (data.success && data.result) {
+        const newFiles = data.result.files;
+        const newEmbedUrl = data.result.embedUrl;
+        setFiles(newFiles);
+        setEmbedUrl(newEmbedUrl);
+
+        const newMp4 = newFiles.high || newFiles.low;
+        if (newMp4) {
+          setCurrentSrc(newMp4);
+          setCurrentQuality(newFiles.high ? 'high' : 'low');
+          setUseEmbed(false);
+          setHasError(false);
+        }
+      }
+    } catch {
+      // Failed to refresh, let the error overlay handle it
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [videoUrl]);
 
   const retryMp4 = () => {
     setHasError(false);
@@ -89,6 +134,7 @@ export default function VideoPlayer({
     <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6 relative group">
       <video
         ref={videoRef}
+        key={currentSrc}
         className="w-full h-full object-contain"
         controls
         muted
@@ -103,16 +149,16 @@ export default function VideoPlayer({
       </video>
 
       {/* Loading overlay */}
-      {isLoading && (
+      {(isLoading || isRefreshing) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
           <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
       {/* Error overlay */}
-      {hasError && (
+      {hasError && !isRefreshing && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-3 z-10">
-          <p className="text-sm text-gray-400">Failed to load video source</p>
+          <p className="text-sm text-gray-400">Video source expired or unavailable</p>
           <div className="flex gap-2">
             <button
               onClick={retryMp4}
@@ -120,6 +166,14 @@ export default function VideoPlayer({
             >
               Retry
             </button>
+            {videoUrl && (
+              <button
+                onClick={refreshUrls}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-xs text-white transition-colors"
+              >
+                Refresh link
+              </button>
+            )}
             <button
               onClick={() => setUseEmbed(true)}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-xs text-white transition-colors"

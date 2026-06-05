@@ -1,23 +1,9 @@
-import { gotScraping } from 'got-scraping';
+import https from 'https';
+import http from 'http';
+import { URL } from 'url';
 import type { TransportResponse } from './types';
 
 export const BASE_URL = 'https://www.xvideos.com';
-
-const DEFAULT_HEADERS = {
-  'accept-language': 'en-US,en;q=0.9',
-  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-  'sec-fetch-dest': 'document',
-  'sec-fetch-mode': 'navigate',
-  'sec-fetch-site': 'none',
-  'sec-fetch-user': '?1',
-  'upgrade-insecure-requests': '1',
-  'cache-control': 'max-age=0',
-};
-
-const REQUEST_TIMEOUT = 15_000;
-const MAX_ATTEMPTS = 3;
-
-const RETRYABLE_ERROR_CODES = new Set(['ECONNABORTED', 'ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT']);
 
 export const resolveUrl = (path: string | undefined): string => {
   if (!path) return '';
@@ -32,6 +18,7 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
 ];
 
 let uaIndex = 0;
@@ -41,37 +28,87 @@ const getUA = (): string => {
   return ua;
 };
 
+const RETRYABLE_ERROR_CODES = new Set(['ECONNABORTED', 'ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ENOTFOUND']);
+
+function httpGet(url: string, timeoutMs: number): Promise<{ body: string; statusCode: number; url: string }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const mod = parsedUrl.protocol === 'https:' ? https : http;
+
+    const headers: Record<string, string> = {
+      'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'accept-language': 'en-US,en;q=0.9',
+      'accept-encoding': 'identity',
+      'user-agent': getUA(),
+      'sec-fetch-dest': 'document',
+      'sec-fetch-mode': 'navigate',
+      'sec-fetch-site': 'none',
+      'sec-fetch-user': '?1',
+      'upgrade-insecure-requests': '1',
+      'cache-control': 'max-age=0',
+    };
+
+    const req = mod.request(
+      url,
+      {
+        method: 'GET',
+        headers,
+        timeout: timeoutMs,
+        rejectUnauthorized: true,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf-8');
+          resolve({
+            body,
+            statusCode: res.statusCode ?? 500,
+            url,
+          });
+        });
+        res.on('error', reject);
+      },
+    );
+
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('Request timed out');
+      (err as Error & { code: string }).code = 'ETIMEDOUT';
+      reject(err);
+    });
+
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 export const createClient = () => {
   const get = async (path: string): Promise<TransportResponse> => {
+    const url = resolveUrl(path);
     let attempt = 1;
+    const MAX_ATTEMPTS = 3;
+    // Vercel Hobby has 10s timeout, so use 8s to leave room
+    const TIMEOUT = process.env.VERCEL ? 8_000 : 15_000;
+
     while (true) {
       try {
-        const response = await gotScraping({
-          url: resolveUrl(path),
-          headers: { ...DEFAULT_HEADERS, 'user-agent': getUA() } as Record<string, string>,
-          http2: false,
-          responseType: 'text',
-          throwHttpErrors: true,
-          retry: { limit: 0 },
-          timeout: { request: REQUEST_TIMEOUT },
-        });
-        return {
-          body: typeof response.body === 'string' ? response.body : String(response.body),
-          statusCode: response.statusCode,
-          url: response.url,
-        };
+        const response = await httpGet(url, TIMEOUT);
+        return response;
       } catch (error: unknown) {
-        const isRateLimit = error instanceof Error && (error.message.includes('429') || error.message.includes('Too Many Requests'));
-        const isRetryableErr = error instanceof Error && (
-          error.name === 'TimeoutError' ||
-          (RETRYABLE_ERROR_CODES.has((error as Error & { code?: string }).code ?? ''))
+        const isRetryable = error instanceof Error && (
+          (RETRYABLE_ERROR_CODES.has((error as Error & { code?: string }).code ?? '')) ||
+          error.message.includes('429') ||
+          error.message.includes('Too Many Requests')
         );
-        if ((isRateLimit || isRetryableErr) && attempt < MAX_ATTEMPTS) {
+        if (isRetryable && attempt < MAX_ATTEMPTS) {
+          const isRateLimit = error instanceof Error && (error.message.includes('429') || error.message.includes('Too Many Requests'));
           await delay(isRateLimit ? attempt * 2000 + Math.random() * 1000 : attempt * 750);
           attempt += 1;
           continue;
         }
-        throw error;
+        // On Vercel with timeout, throw a user-friendly error
+        throw new Error(`Failed to load page: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   };
