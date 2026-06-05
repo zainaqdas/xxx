@@ -223,11 +223,12 @@ export default function VideoPlayer({
     return (
       <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6 relative">
         <iframe
-          src={embedUrl}
+          src={`/api/embed-proxy?url=${encodeURIComponent(embedUrl)}`}
           className="w-full h-full"
           allowFullScreen
           allow="autoplay; fullscreen"
           title={`Video player (embed) - ${title}`}
+          sandbox="allow-scripts allow-same-origin allow-forms"
         />
         {mp4Source && (
           <div className="absolute bottom-4 right-4 z-10">
