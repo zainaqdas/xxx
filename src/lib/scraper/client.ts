@@ -30,8 +30,15 @@ const getUA = (): string => {
 
 const RETRYABLE_ERROR_CODES = new Set(['ECONNABORTED', 'ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ENOTFOUND']);
 
-function httpGet(url: string, timeoutMs: number): Promise<{ body: string; statusCode: number; url: string }> {
+const MAX_REDIRECTS = 5;
+
+function httpGet(url: string, timeoutMs: number, redirectCount = 0): Promise<{ body: string; statusCode: number; url: string }> {
   return new Promise((resolve, reject) => {
+    if (redirectCount > MAX_REDIRECTS) {
+      reject(new Error('Too many redirects'));
+      return;
+    }
+
     const parsedUrl = new URL(url);
     const mod = parsedUrl.protocol === 'https:' ? https : http;
 
@@ -57,6 +64,20 @@ function httpGet(url: string, timeoutMs: number): Promise<{ body: string; status
         rejectUnauthorized: true,
       },
       (res) => {
+        // Handle redirects
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+          const location = res.headers['location'];
+          if (location) {
+            // Resolve relative redirects
+            const redirectUrl = location.startsWith('http') ? location : new URL(location, url).toString();
+            // Consume the response body to free memory
+            res.resume();
+            // Follow redirect
+            httpGet(redirectUrl, timeoutMs, redirectCount + 1).then(resolve).catch(reject);
+            return;
+          }
+        }
+
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
