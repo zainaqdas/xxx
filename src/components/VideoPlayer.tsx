@@ -117,6 +117,63 @@ export default function VideoPlayer({
     };
   }, []);
 
+  // --- Keyboard handler ---
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+
+    switch (e.key) {
+      case ' ':
+      case 'Space':
+        e.preventDefault();
+        togglePlay();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        showControlsTemporarily();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        showControlsTemporarily();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        video.volume = Math.min(1, video.volume + 0.1);
+        video.muted = false;
+        setVolume(video.volume);
+        setIsMuted(false);
+        showControlsTemporarily();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        video.volume = Math.max(0, video.volume - 0.1);
+        video.muted = video.volume === 0;
+        setVolume(video.volume);
+        setIsMuted(video.muted);
+        showControlsTemporarily();
+        break;
+      case 'f':
+      case 'F':
+        e.preventDefault();
+        toggleFullscreen();
+        break;
+      case 'm':
+      case 'M':
+        e.preventDefault();
+        toggleMute();
+        break;
+      case '0': case '1': case '2': case '3': case '4':
+      case '5': case '6': case '7': case '8': case '9':
+        e.preventDefault();
+        const pct = parseInt(e.key, 10) / 9 * 100; // 0→0%, 9→100%
+        video.currentTime = (pct / 100) * video.duration;
+        showControlsTemporarily();
+        break;
+    }
+  };
+
   // --- Playback handlers ---
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -220,8 +277,10 @@ export default function VideoPlayer({
     <div
       ref={containerRef}
       className="aspect-video bg-black rounded-xl overflow-hidden mb-6 relative group select-none"
+      tabIndex={-1}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => isPlaying && setShowControls(false)}
+      onKeyDown={handleKeyDown}
     >
       {/* Video element */}
       <video
