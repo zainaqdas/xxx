@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60">
+  <defs>
+    <linearGradient id="lBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#b91c1c"/>
+    </linearGradient>
+    <linearGradient id="lX" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fca5a5"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon: Red rounded square with X -->
+  <rect x="0" y="4" width="52" height="52" rx="12" fill="url(#lBg)"/>
+  <g transform="translate(26,30)">
+    <line x1="-12" y1="-12" x2="12" y2="12" stroke="url(#lX)" stroke-width="8" stroke-linecap="round"/>
+    <line x1="12" y1="-12" x2="-12" y2="12" stroke="url(#lX)" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <!-- Text -->
+  <text x="66" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="800" fill="white" letter-spacing="-0.5">xxx</text>
+  <text x="168" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="300" fill="#9ca3af" letter-spacing="1">Hub</text>
+  <text x="219" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="800" fill="white" letter-spacing="-0.5">xxx</text>
+</svg>

@@ -8,7 +8,7 @@ export default function Footer() {
             <span className="font-medium">xxxHubxxx</span>
           </div>
           <p className="text-sm text-gray-500">
-            Built with Next.js • Powered by xvideos.com data
+            xxxHubxxx © {new Date().getFullYear()}. All rights reserved.
           </p>
         </div>
       </div>
