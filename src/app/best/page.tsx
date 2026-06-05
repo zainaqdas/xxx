@@ -42,15 +42,17 @@ export default async function BestPage({ searchParams }: { searchParams: Promise
         <div className="flex gap-2 flex-wrap">
           {months.slice(0, 6).map((m) => {
             const [y, mo] = m.value.split('-');
+            const shortLabel = m.label.replace(/\s\d{4}$/, '').substring(0, 3) + m.label.match(/\s\d{4}$/)?.[0] || '';
             return (
               <Link
                 key={m.value}
                 href={`/best?year=${y}&month=${mo}`}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                   year === y && month === mo ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
               >
-                {m.label}
+                <span className="sm:hidden">{shortLabel}</span>
+                <span className="hidden sm:inline">{m.label}</span>
               </Link>
             );
           })}

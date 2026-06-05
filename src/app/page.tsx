@@ -27,10 +27,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <h1 className="text-2xl font-bold text-white">Trending</h1>
           <p className="text-sm text-gray-400 mt-1">Popular videos from across the platform</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/fresh" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors">Fresh</Link>
-          <Link href="/best" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors">Best</Link>
-          <Link href="/verified" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors">Verified</Link>
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto -mr-4 pr-4 sm:mr-0 sm:pr-0">
+          <Link href="/fresh" className="shrink-0 px-3 sm:px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs sm:text-sm text-gray-300 transition-colors">Fresh</Link>
+          <Link href="/best" className="shrink-0 px-3 sm:px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs sm:text-sm text-gray-300 transition-colors">Best</Link>
+          <Link href="/verified" className="shrink-0 px-3 sm:px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs sm:text-sm text-gray-300 transition-colors">Verified</Link>
         </div>
       </div>
 
