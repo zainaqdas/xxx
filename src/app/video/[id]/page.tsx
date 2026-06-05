@@ -63,7 +63,7 @@ export default async function VideoPage({
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       {/* Video Player - native HTML5 with MP4 from scraped URLs */}
-      <VideoPlayer files={detail.files} embedUrl={detail.embedUrl} title={detail.title} poster={detail.thumbnailUrls[0]} videoUrl={url} />
+      <VideoPlayer files={detail.files} title={detail.title} poster={detail.thumbnailUrls[0]} videoUrl={url} />
 
       {/* Title & Meta */}
       <div className="mb-6">

@@ -10,13 +10,11 @@ interface VideoFiles {
 
 export default function VideoPlayer({
   files: initialFiles,
-  embedUrl: initialEmbedUrl,
   title,
   poster,
   videoUrl,
 }: {
   files: VideoFiles;
-  embedUrl: string;
   title: string;
   poster?: string;
   videoUrl?: string;
@@ -27,9 +25,7 @@ export default function VideoPlayer({
   const volumeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshCount = useRef(0);
   const [files, setFiles] = useState(initialFiles);
-  const [embedUrl, setEmbedUrl] = useState(initialEmbedUrl);
   const mp4Source = files.high || files.low;
-  const [useEmbed, setUseEmbed] = useState(!mp4Source);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState<'low' | 'high'>(files.high ? 'high' : 'low');
@@ -83,14 +79,11 @@ export default function VideoPlayer({
       const data = await res.json();
       if (data.success && data.result) {
         const newFiles = data.result.files;
-        const newEmbedUrl = data.result.embedUrl;
         setFiles(newFiles);
-        setEmbedUrl(newEmbedUrl);
         const newMp4 = newFiles.high || newFiles.low;
         if (newMp4) {
           setCurrentSrc(newMp4);
           setCurrentQuality(newFiles.high ? 'high' : 'low');
-          setUseEmbed(false);
           setHasError(false);
         }
       }
@@ -103,7 +96,6 @@ export default function VideoPlayer({
 
   const retryMp4 = () => {
     setHasError(false);
-    setUseEmbed(false);
     setIsLoading(true);
     videoRef.current?.load();
   };
@@ -216,37 +208,14 @@ export default function VideoPlayer({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // ==============================
-  // EMBED FALLBACK
-  // ==============================
-  if (useEmbed) {
+  // No MP4 source available
+  if (!mp4Source) {
     return (
-      <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6 relative">
-        <iframe
-          src={`/api/embed-proxy?url=${encodeURIComponent(embedUrl)}`}
-          className="w-full h-full"
-          allowFullScreen
-          allow="autoplay; fullscreen"
-          title={`Video player (embed) - ${title}`}
-          sandbox="allow-scripts allow-same-origin allow-forms"
-        />
-        {mp4Source && (
-          <div className="absolute bottom-4 right-4 z-10">
-            <button
-              onClick={() => { setUseEmbed(false); retryMp4(); }}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800/90 text-gray-300 hover:bg-gray-700/90 transition-colors"
-            >
-              Try MP4 player
-            </button>
-          </div>
-        )}
+      <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6 flex items-center justify-center">
+        <p className="text-sm text-gray-500">No video source available</p>
       </div>
     );
   }
-
-  // ==============================
-  // NATIVE MP4 PLAYER
-  // ==============================
   return (
     <div
       ref={containerRef}
@@ -307,7 +276,7 @@ export default function VideoPlayer({
             {videoUrl && (
               <button onClick={refreshUrls} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-xs text-white transition-colors">Refresh link</button>
             )}
-            <button onClick={() => setUseEmbed(true)} className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-xs text-white transition-colors">Use embed player</button>
+
           </div>
         </div>
       )}
@@ -420,12 +389,6 @@ export default function VideoPlayer({
                           {currentQuality === q.key && ' ✓'}
                         </button>
                       ))}
-                      <button
-                        onClick={() => { setUseEmbed(true); setShowQualityMenu(false); }}
-                        className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 transition-colors"
-                      >
-                        Embed
-                      </button>
                     </div>
                   </>
                 )}
