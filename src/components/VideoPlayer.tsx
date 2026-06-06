@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import Hls from 'hls.js';
 import { toProxyUrl } from '@/lib/proxy';
 
 interface VideoFiles {
@@ -22,16 +23,39 @@ export default function VideoPlayer({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshCount = useRef(0);
   const [files, setFiles] = useState(initialFiles);
 
-  const mp4Source = toProxyUrl(files.high || '') || toProxyUrl(files.low || '');
-  const [isLoading, setIsLoading] = useState(false);
+  const mp4Src = toProxyUrl(files.high || '') || toProxyUrl(files.low || '');
+  const hlsSrc = files.HLS ? toProxyUrl(files.HLS) : '';
+
+  // HLS availability
+  const hlsAvailable = !!(files.HLS && hlsSrc && Hls.isSupported());
+  const nativeHlsAvailable = !!(
+    files.HLS && hlsSrc && typeof window !== 'undefined' &&
+    videoRef.current?.canPlayType('application/vnd.apple.mpegurl')
+  );
+
+  // Default to MP4 (faster seeking). HLS only when user opts in or when MP4 is unavailable.
+  const [hlsEnabled, setHlsEnabled] = useState(false);
+  const useHls = (hlsEnabled || !mp4Src) && hlsAvailable;
+  const hasNativeHls = !useHls && (hlsEnabled || !mp4Src) && nativeHlsAvailable;
+
+  // Stream mode toggle
+  const [showStreamMenu, setShowStreamMenu] = useState(false);
+  const canToggleStream = !!(mp4Src && (hlsAvailable || nativeHlsAvailable));
+
+  const toggleStreamMode = () => {
+    setHlsEnabled((prev) => !prev);
+    setShowStreamMenu(false);
+  };
+
+  // Playback state
+  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [currentQuality, setCurrentQuality] = useState<'low' | 'high'>(files.high ? 'high' : 'low');
-  const [currentSrc, setCurrentSrc] = useState(mp4Source || '');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -44,42 +68,133 @@ export default function VideoPlayer({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const [hlsLevels, setHlsLevels] = useState<{ height: number; label: string }[]>([]);
+  const [currentHlsLevel, setCurrentHlsLevel] = useState(-1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPiP, setIsPiP] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
 
   const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-  const qualities: { key: 'low' | 'high'; label: string }[] = [];
-  if (files.low) qualities.push({ key: 'low', label: 'SD' });
-  if (files.high) qualities.push({ key: 'high', label: 'HD' });
+  // MP4 quality selector
+  const mp4Qualities: { key: 'low' | 'high'; label: string }[] = [];
+  if (files.low) mp4Qualities.push({ key: 'low', label: 'SD' });
+  if (files.high) mp4Qualities.push({ key: 'high', label: 'HD' });
+  const isMp4Mode = !useHls && !hasNativeHls;
 
   // Proxy the poster URL if it's a CDN URL
   const proxiedPoster = poster ? toProxyUrl(poster) : undefined;
 
-  // --- Source switching ---
+  // ── HLS.js setup ────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (videoRef.current && currentSrc) {
+    const video = videoRef.current;
+    if (!video || !hlsSrc) return;
+
+    // Destroy any existing HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (useHls) {
       setIsLoading(true);
       setHasError(false);
-      videoRef.current.load();
+      const hls = new Hls();
+      hlsRef.current = hls;
+
+      hls.loadSource(hlsSrc);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsLoading(false);
+        const levels = hls.levels.map((l) => ({
+          height: l.height,
+          label: l.height >= 720 ? 'HD' : l.height >= 480 ? 'SD' : `${l.height}p`,
+        }));
+        setHlsLevels(levels);
+      });
+
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+        setCurrentHlsLevel(data.level);
+      });
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              hlsRef.current = null;
+              if (mp4Src) setHlsEnabled(false);
+              break;
+          }
+        }
+      });
+    } else if (hasNativeHls) {
+      video.src = hlsSrc;
+      setIsLoading(false);
     }
-  }, [currentSrc]);
 
-  const handleCanPlay = () => setIsLoading(false);
-  const handleError = () => {
-    setIsLoading(false);
-    setHasError(true);
-  };
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [useHls, hlsSrc, mp4Src]);
 
-  const switchQuality = (q: 'low' | 'high') => {
-    if (!files[q]) return;
-    setCurrentQuality(q);
-    setCurrentSrc(toProxyUrl(files[q]!));
+  // Cleanup HLS on unmount
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, []);
+
+  // ── HLS quality switching ───────────────────────────────────────────────
+
+  const switchHlsLevel = (levelIndex: number) => {
+    if (!hlsRef.current) return;
+    hlsRef.current.currentLevel = levelIndex;
+    setCurrentHlsLevel(levelIndex);
     setShowQualityMenu(false);
   };
 
-  // --- Refresh URLs ---
+  // ── MP4 source switching ────────────────────────────────────────────────
+
+  const [currentSrcProxied, setCurrentSrcProxied] = useState(
+    useHls || hasNativeHls ? '' : mp4Src,
+  );
+
+  useEffect(() => {
+    setCurrentSrcProxied(useHls || hasNativeHls ? '' : mp4Src);
+  }, [useHls, hasNativeHls, mp4Src]);
+
+  const switchMp4Quality = (q: 'low' | 'high') => {
+    if (!files[q]) return;
+    setCurrentSrcProxied(toProxyUrl(files[q]!));
+    setShowQualityMenu(false);
+  };
+
+  useEffect(() => {
+    if (videoRef.current && !useHls && !hasNativeHls && currentSrcProxied) {
+      setIsLoading(true);
+      setHasError(false);
+      videoRef.current.src = currentSrcProxied;
+      videoRef.current.load();
+    }
+  }, [currentSrcProxied, useHls, hasNativeHls]);
+
+  // ── Refresh URLs ────────────────────────────────────────────────────────
+
   const refreshUrls = useCallback(async () => {
     if (!videoUrl || refreshCount.current >= 2) return;
     refreshCount.current += 1;
@@ -88,14 +203,8 @@ export default function VideoPlayer({
       const res = await fetch(`/api/video-details?url=${encodeURIComponent(videoUrl)}`);
       const data = await res.json();
       if (data.success && data.result) {
-        const newFiles = data.result.files;
-        setFiles(newFiles);
-        const newMp4 = toProxyUrl(newFiles.high || '') || toProxyUrl(newFiles.low || '');
-        if (newMp4) {
-          setCurrentSrc(newMp4);
-          setCurrentQuality(newFiles.high ? 'high' : 'low');
-          setHasError(false);
-        }
+        setFiles(data.result.files);
+        setHasError(false);
       }
     } catch {
       // ignore
@@ -104,13 +213,18 @@ export default function VideoPlayer({
     }
   }, [videoUrl]);
 
-  const retryMp4 = () => {
+  const retry = () => {
     setHasError(false);
     setIsLoading(true);
-    videoRef.current?.load();
+    if (useHls && hlsRef.current) {
+      hlsRef.current.startLoad();
+    } else if (videoRef.current) {
+      videoRef.current.load();
+    }
   };
 
-  // --- Controls visibility ---
+  // ── Controls visibility ─────────────────────────────────────────────────
+
   const showControlsTemporarily = useCallback(() => {
     setShowControls(true);
     if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
@@ -120,14 +234,19 @@ export default function VideoPlayer({
   }, [isPlaying]);
 
   useEffect(() => {
-    setPipSupported('pictureInPictureEnabled' in document && document.pictureInPictureEnabled);
+    setPipSupported(
+      typeof document !== 'undefined' &&
+        'pictureInPictureEnabled' in document &&
+        document.pictureInPictureEnabled,
+    );
     return () => {
       if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
       if (volumeTimeout.current) clearTimeout(volumeTimeout.current);
     };
   }, []);
 
-  // --- Keyboard handler ---
+  // ── Keyboard handler ─────────────────────────────────────────────────────
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -202,7 +321,8 @@ export default function VideoPlayer({
     }
   };
 
-  // --- Playback handlers ---
+  // ── Playback handlers ────────────────────────────────────────────────────
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
@@ -230,6 +350,11 @@ export default function VideoPlayer({
   const handlePause = () => {
     setIsPlaying(false);
     setShowControls(true);
+  };
+  const handleCanPlay = () => setIsLoading(false);
+  const handleError = () => {
+    setIsLoading(false);
+    setHasError(true);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -287,7 +412,8 @@ export default function VideoPlayer({
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
-  // --- Format time ---
+  // ── Formatting ───────────────────────────────────────────────────────────
+
   const formatTime = (s: number) => {
     if (!isFinite(s)) return '0:00';
     const h = Math.floor(s / 3600);
@@ -300,8 +426,9 @@ export default function VideoPlayer({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const bufferedPercent = duration > 0 ? (buffered / duration) * 100 : 0;
 
-  // No MP4 source available
-  if (!mp4Source) {
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  if (!mp4Src && !hlsSrc) {
     return (
       <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6 flex items-center justify-center">
         <p className="text-sm text-gray-500">No video source available</p>
@@ -321,7 +448,6 @@ export default function VideoPlayer({
       {/* ═══ Video element ═══ */}
       <video
         ref={videoRef}
-        key={currentSrc}
         className="w-full h-full object-contain cursor-pointer"
         muted
         playsInline
@@ -333,10 +459,10 @@ export default function VideoPlayer({
         onProgress={handleProgress}
         onLoadedMetadata={handleLoadedMetadata}
         onCanPlay={handleCanPlay}
-        onError={handleError}
+        onError={useHls || hasNativeHls ? undefined : handleError}
         title={`Video player - ${title}`}
       >
-        <source src={currentSrc} type="video/mp4" />
+        {!useHls && !hasNativeHls && <source src={currentSrcProxied || mp4Src} type="video/mp4" />}
         Your browser does not support HTML5 video.
       </video>
 
@@ -369,7 +495,7 @@ export default function VideoPlayer({
           </svg>
           <p className="text-sm text-gray-400">Video source expired or unavailable</p>
           <div className="flex gap-2">
-            <button onClick={retryMp4} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white transition-colors">
+            <button onClick={retry} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white transition-colors">
               Retry
             </button>
             {videoUrl && (
@@ -421,6 +547,41 @@ export default function VideoPlayer({
             {/* Spacer */}
             <div className="flex-1" />
 
+            {/* Stream mode toggle */}
+            {canToggleStream && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowStreamMenu(!showStreamMenu)}
+                  className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors hidden sm:inline-flex items-center gap-1"
+                  title="Stream mode"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {useHls || hasNativeHls ? 'HLS' : 'MP4'}
+                </button>
+                {showStreamMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowStreamMenu(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-20 overflow-hidden min-w-[90px]">
+                      <button
+                        onClick={() => { if (useHls || hasNativeHls) toggleStreamMode(); setShowStreamMenu(false); }}
+                        className={`block w-full text-left px-3 py-2 text-xs transition-colors ${!useHls && !hasNativeHls ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}
+                      >
+                        MP4 {!useHls && !hasNativeHls && '✓'}
+                      </button>
+                      <button
+                        onClick={() => { if (!useHls && !hasNativeHls) toggleStreamMode(); setShowStreamMenu(false); }}
+                        className={`block w-full text-left px-3 py-2 text-xs transition-colors ${useHls || hasNativeHls ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}
+                      >
+                        HLS {(useHls || hasNativeHls) && '✓'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Volume - animated slider */}
             <div
               className="hidden sm:flex relative items-center"
@@ -467,39 +628,41 @@ export default function VideoPlayer({
               )}
             </div>
 
-            {/* Quality selector */}
-            {qualities.length > 0 && (
+            {/* Quality selector - HLS mode shows adaptive levels, MP4 shows SD/HD */}
+            {useHls && hlsLevels.length > 0 ? (
               <div className="relative">
-                <button
-                  onClick={() => setShowQualityMenu(!showQualityMenu)}
-                  className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors"
-                  title="Quality"
-                >
-                  {currentQuality === 'high' ? 'HD' : 'SD'} ▾
+                <button onClick={() => setShowQualityMenu(!showQualityMenu)} className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors" title="Quality">
+                  {currentHlsLevel === -1 ? 'Auto' : hlsLevels[currentHlsLevel]?.label || 'Auto'} ▾
                 </button>
                 {showQualityMenu && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowQualityMenu(false)} />
                     <div className="absolute bottom-full right-0 mb-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-20 overflow-hidden min-w-[100px]">
-                      {qualities.map((q) => (
-                        <button
-                          key={q.key}
-                          onClick={() => switchQuality(q.key)}
-                          className={`block w-full text-left px-3 py-2 text-xs transition-colors ${
-                            currentQuality === q.key
-                              ? 'bg-red-600/20 text-red-400'
-                              : 'text-gray-300 hover:bg-gray-800'
-                          }`}
-                        >
-                          {q.label}
-                          {currentQuality === q.key && ' ✓'}
-                        </button>
+                      <button onClick={() => switchHlsLevel(-1)} className={`block w-full text-left px-3 py-2 text-xs transition-colors ${currentHlsLevel === -1 ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}>Auto ✓</button>
+                      {hlsLevels.map((level, i) => (
+                        <button key={i} onClick={() => switchHlsLevel(i)} className={`block w-full text-left px-3 py-2 text-xs transition-colors ${currentHlsLevel === i ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}>{level.label}</button>
                       ))}
                     </div>
                   </>
                 )}
               </div>
-            )}
+            ) : isMp4Mode && mp4Qualities.length > 0 ? (
+              <div className="relative">
+                <button onClick={() => setShowQualityMenu(!showQualityMenu)} className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors" title="Quality">
+                  {currentSrcProxied === toProxyUrl(files.high || '') || !currentSrcProxied ? 'HD' : 'SD'} ▾
+                </button>
+                {showQualityMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowQualityMenu(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-20 overflow-hidden min-w-[100px]">
+                      {mp4Qualities.map((q) => (
+                        <button key={q.key} onClick={() => switchMp4Quality(q.key)} className={`block w-full text-left px-3 py-2 text-xs transition-colors ${((q.key === 'high') && (currentSrcProxied === toProxyUrl(files.high || '') || !currentSrcProxied)) || (q.key === 'low' && currentSrcProxied === toProxyUrl(files.low || '')) ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}>{q.label}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
 
             {/* Picture-in-Picture */}
             {pipSupported && (
