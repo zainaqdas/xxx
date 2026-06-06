@@ -13,7 +13,7 @@ export const ALLOWED_PROXY_HOSTS = [
  * bandwidth) instead of through Vercel.
  *
  * Set NEXT_PUBLIC_CF_WORKER_URL to your deployed Worker URL, e.g.:
- *   NEXT_PUBLIC_CF_WORKER_URL=https://xxxhubxxx-proxy.your-name.workers.dev
+ *   NEXT_PUBLIC_CF_WORKER_URL=https://streamingpod-proxy.dgfrii1800.workers.dev
  *
  * If the env var is not set (e.g. local development), the original CDN
  * URL is returned directly — thumbnails still load, but video playback

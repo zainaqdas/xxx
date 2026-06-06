@@ -15,11 +15,11 @@
  * -------------------------------
  *   ALLOWED_ORIGIN  — (optional) Restrict CORS to a specific origin.
  *   SITE_ORIGIN     — (optional) The Vercel site URL to proxy.
- *                     Defaults to https://xxxhubxxx.vercel.app
+ *                     Defaults to https://streamingpod.vercel.app
  */
 
 const CDN_HOSTS = ['xvideos-cdn.com', 'xv-cdn.com'];
-const DEFAULT_SITE_ORIGIN = 'https://xxxhubxxx.vercel.app';
+const DEFAULT_SITE_ORIGIN = 'https://streamingpod.vercel.app';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ function rewriteHlsManifest(manifest, baseUrl) {
 /**
  * Rewrite HTML to replace any hardcoded Vercel site URL with
  * worker-relative paths so all links stay inside the proxy.
- * e.g. https://xxxhubxxx.vercel.app/fresh → /fresh
+ * e.g. https://streamingpod.vercel.app/fresh → /fresh
  *
  * Only replaces the origin when it appears as a full URL prefix
  * (followed by / or " or '), never inside words or paths.
