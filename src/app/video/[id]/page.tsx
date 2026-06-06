@@ -2,6 +2,7 @@ import xvideos from '@/lib/scraper/index';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer';
+import { toProxyUrl } from '@/lib/proxy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,7 +64,7 @@ export default async function VideoPage({
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       {/* Video Player - native HTML5 with MP4 from scraped URLs */}
-      <VideoPlayer files={detail.files} title={detail.title} poster={detail.thumbnailUrls[0]} videoUrl={url} />
+      <VideoPlayer files={detail.files} title={detail.title} poster={toProxyUrl(detail.thumbnailUrls[0] || '')} videoUrl={url} />
 
       {/* Title & Meta */}
       <div className="mb-6">
@@ -155,17 +156,17 @@ export default async function VideoPage({
           <h3 className="text-sm font-medium text-gray-400 mb-2">Download Links</h3>
           <div className="flex flex-wrap gap-2">
             {detail.files.low && (
-              <a href={detail.files.low} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
+              <a href={toProxyUrl(detail.files.low)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
                 Low Quality
               </a>
             )}
             {detail.files.high && (
-              <a href={detail.files.high} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
+              <a href={toProxyUrl(detail.files.high)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
                 High Quality
               </a>
             )}
             {detail.files.HLS && (
-              <a href={detail.files.HLS} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
+              <a href={toProxyUrl(detail.files.HLS)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
                 HLS Stream
               </a>
             )}
@@ -179,7 +180,7 @@ export default async function VideoPage({
           <h3 className="text-sm font-medium text-gray-400 mb-2">Thumbnails</h3>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {detail.thumbnailUrls.map((thumb, i) => (
-              <img key={i} src={thumb} alt={`Thumbnail ${i + 1}`} className="h-20 rounded-lg object-cover flex-shrink-0" loading="lazy" />
+              <img key={i} src={toProxyUrl(thumb)} alt={`Thumbnail ${i + 1}`} className="h-20 rounded-lg object-cover flex-shrink-0" loading="lazy" />
             ))}
           </div>
         </div>

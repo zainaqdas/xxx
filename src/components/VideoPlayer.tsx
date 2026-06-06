@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { toProxyUrl } from '@/lib/proxy';
 
 interface VideoFiles {
   low?: string;
@@ -25,7 +26,8 @@ export default function VideoPlayer({
   const volumeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshCount = useRef(0);
   const [files, setFiles] = useState(initialFiles);
-  const mp4Source = files.high || files.low;
+
+  const mp4Source = toProxyUrl(files.high || '') || toProxyUrl(files.low || '');
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState<'low' | 'high'>(files.high ? 'high' : 'low');
@@ -47,6 +49,9 @@ export default function VideoPlayer({
   if (files.low) qualities.push({ key: 'low', label: 'Low' });
   if (files.high) qualities.push({ key: 'high', label: 'HD' });
 
+  // Proxy the poster URL if it's a CDN URL
+  const proxiedPoster = poster ? toProxyUrl(poster) : undefined;
+
   // --- Source switching ---
   useEffect(() => {
     if (videoRef.current && currentSrc) {
@@ -65,7 +70,7 @@ export default function VideoPlayer({
   const switchQuality = (q: 'low' | 'high') => {
     if (!files[q]) return;
     setCurrentQuality(q);
-    setCurrentSrc(files[q]!);
+    setCurrentSrc(toProxyUrl(files[q]!));
     setShowQualityMenu(false);
   };
 
@@ -80,7 +85,7 @@ export default function VideoPlayer({
       if (data.success && data.result) {
         const newFiles = data.result.files;
         setFiles(newFiles);
-        const newMp4 = newFiles.high || newFiles.low;
+        const newMp4 = toProxyUrl(newFiles.high || '') || toProxyUrl(newFiles.low || '');
         if (newMp4) {
           setCurrentSrc(newMp4);
           setCurrentQuality(newFiles.high ? 'high' : 'low');
@@ -289,7 +294,7 @@ export default function VideoPlayer({
         className="w-full h-full object-contain cursor-pointer"
         muted
         playsInline
-        poster={poster}
+        poster={proxiedPoster}
         onClick={togglePlay}
         onPlay={handlePlay}
         onPause={handlePause}

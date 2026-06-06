@@ -1,6 +1,7 @@
 import https from 'https';
 import http from 'http';
 import { URL } from 'url';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { TransportResponse } from './types';
 
 export const BASE_URL = 'https://www.xvideos.com';
@@ -27,6 +28,14 @@ const getUA = (): string => {
   uaIndex += 1;
   return ua;
 };
+
+// Proxy configuration. Set PROXY_URL to route all requests through an HTTP(S) proxy.
+// Example: http://user:pass@proxy.example.com:8080
+let proxyAgent: HttpsProxyAgent<string> | null = null;
+const proxyUrl = process.env.PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '';
+if (proxyUrl) {
+  proxyAgent = new HttpsProxyAgent(proxyUrl);
+}
 
 const RETRYABLE_ERROR_CODES = new Set(['ECONNABORTED', 'ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ENOTFOUND']);
 
@@ -62,7 +71,8 @@ function httpGet(url: string, timeoutMs: number, redirectCount = 0): Promise<{ b
         headers,
         timeout: timeoutMs,
         rejectUnauthorized: true,
-      },
+        ...(proxyAgent ? { agent: proxyAgent as http.Agent } : {}),
+      } as Parameters<typeof https.request>[1],
       (res) => {
         // Handle redirects
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {

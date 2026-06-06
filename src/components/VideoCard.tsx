@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { VideoSummary } from '@/lib/scraper/index';
+import { toProxyUrl } from '@/lib/proxy';
 
 export default function VideoCard({ video }: { video: VideoSummary }) {
   const formatViews = (count: number) => {
@@ -18,7 +19,7 @@ export default function VideoCard({ video }: { video: VideoSummary }) {
     <Link href={`/video/${encodeURIComponent(video.videoId)}?url=${encodeURIComponent(video.url)}`} className="group block">
       <div className="relative aspect-video bg-gray-800 rounded-xl overflow-hidden">
         <img
-          src={video.thumbnailUrl}
+          src={toProxyUrl(video.thumbnailUrl)}
           alt={video.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
