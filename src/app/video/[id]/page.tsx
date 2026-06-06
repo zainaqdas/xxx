@@ -3,13 +3,18 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer';
 import { toProxyUrl } from '@/lib/proxy';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getDetails(url: string) {
   try {
-    const result = await xvideos.videos.details({ url });
+    const result = await cacheWrap(
+      `details:url=${url}`,
+      () => xvideos.videos.details({ url }),
+      TTL.DETAILS,
+    );
     return { success: true as const, result };
   } catch (error) {
     return { success: false as const, error: String(error) };

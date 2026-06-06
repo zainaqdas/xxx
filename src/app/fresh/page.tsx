@@ -1,13 +1,18 @@
 import xvideos from '@/lib/scraper/index';
 import VideoGrid from '@/components/VideoGrid';
 import Pagination from '@/components/Pagination';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getData(page: number) {
   try {
-    const result = await xvideos.videos.fresh({ page });
+    const result = await cacheWrap(
+      `fresh:page=${page}`,
+      () => xvideos.videos.fresh({ page }),
+      TTL.LISTINGS,
+    );
     return { success: true as const, result };
   } catch (error) {
     return { success: false as const, error: String(error) };

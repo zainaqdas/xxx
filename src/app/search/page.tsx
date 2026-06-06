@@ -2,6 +2,7 @@ import xvideos from '@/lib/scraper/index';
 import VideoGrid from '@/components/VideoGrid';
 import Pagination from '@/components/Pagination';
 import SearchBar from '@/components/SearchBar';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -10,14 +11,19 @@ type Params = { page?: string; k?: string; sort?: string; durf?: string; datef?:
 
 async function getData(page: number, k?: string, sort?: string, durf?: string, datef?: string, quality?: string) {
   try {
-    const result = await xvideos.videos.search({
-      page,
-      k: k || '',
-      sort: (sort as any) || 'relevance',
-      durf: (durf as any) || 'allduration',
-      datef: (datef as any) || 'all',
-      quality: (quality as any) || 'all',
-    });
+    const key = `search:page=${page},k=${k ?? ''},sort=${sort ?? ''},durf=${durf ?? ''},datef=${datef ?? ''},quality=${quality ?? ''}`;
+    const result = await cacheWrap(
+      key,
+      () => xvideos.videos.search({
+        page,
+        k: k || '',
+        sort: (sort as any) || 'relevance',
+        durf: (durf as any) || 'allduration',
+        datef: (datef as any) || 'all',
+        quality: (quality as any) || 'all',
+      }),
+      TTL.LISTINGS,
+    );
     return { success: true as const, result };
   } catch (error) {
     return { success: false as const, error: String(error) };

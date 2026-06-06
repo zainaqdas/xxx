@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import xvideos from '@/lib/scraper/index';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,7 +13,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await xvideos.videos.details({ url });
+    const result = await cacheWrap(
+      `details:url=${url}`,
+      () => xvideos.videos.details({ url }),
+      TTL.DETAILS,
+    );
     return NextResponse.json({ success: true, result });
   } catch (error) {
     return NextResponse.json(
