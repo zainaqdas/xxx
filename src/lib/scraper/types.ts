@@ -79,7 +79,7 @@ export type VideoDetailsBatchResult = { items: VideoDetailsBatchItem[]; successe
 export type SearchOptions = {
   page?: number;
   k?: string;
-  sort?: 'relevance' | 'uploaddate' | 'rating' | 'length';
+  sort?: 'relevance' | 'uploaddate' | 'most-rated' | 'length';
   durf?: 'allduration' | '1-3min' | '3-10min' | '10-30min' | '30min+';
   datef?: 'all' | 'today' | 'week' | 'month';
   quality?: 'all' | 'hd' | '4k';

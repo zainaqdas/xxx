@@ -56,7 +56,7 @@ export default function SearchBar({ initial }: { initial?: SearchParams }) {
         <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-500">
           <option value="relevance">Relevance</option>
           <option value="uploaddate">Upload Date</option>
-          <option value="rating">Rating</option>
+          <option value="most-rated">Rating</option>
           <option value="length">Length</option>
         </select>
         <select value={durf} onChange={(e) => setDurf(e.target.value)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-500">
