@@ -36,17 +36,22 @@ export default function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(true); // starts muted per HTML muted attribute
+  const [isMuted, setIsMuted] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPiP, setIsPiP] = useState(false);
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
 
+  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
   const qualities: { key: 'low' | 'high'; label: string }[] = [];
-  if (files.low) qualities.push({ key: 'low', label: 'Low' });
+  if (files.low) qualities.push({ key: 'low', label: 'SD' });
   if (files.high) qualities.push({ key: 'high', label: 'HD' });
 
   // Proxy the poster URL if it's a CDN URL
@@ -169,13 +174,31 @@ export default function VideoPlayer({
         e.preventDefault();
         toggleMute();
         break;
+      case '>':
+      case '.':
+        e.preventDefault();
+        cycleSpeed(1);
+        break;
+      case '<':
+      case ',':
+        e.preventDefault();
+        cycleSpeed(-1);
+        break;
       case '0': case '1': case '2': case '3': case '4':
       case '5': case '6': case '7': case '8': case '9':
         e.preventDefault();
-        const pct = parseInt(e.key, 10) / 9 * 100; // 0→0%, 9→100%
-        video.currentTime = (pct / 100) * video.duration;
+        video.currentTime = (parseInt(e.key, 10) / 9) * video.duration;
         showControlsTemporarily();
         break;
+    }
+  };
+
+  const cycleSpeed = (dir: 1 | -1) => {
+    const idx = speeds.indexOf(playbackRate);
+    const next = idx + dir;
+    if (next >= 0 && next < speeds.length) {
+      setPlaybackRate(speeds[next]);
+      if (videoRef.current) videoRef.current.playbackRate = speeds[next];
     }
   };
 
@@ -195,6 +218,12 @@ export default function VideoPlayer({
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) setDuration(videoRef.current.duration);
+  };
+
+  const handleProgress = () => {
+    if (videoRef.current && videoRef.current.buffered.length > 0) {
+      setBuffered(videoRef.current.buffered.end(videoRef.current.buffered.length - 1));
+    }
   };
 
   const handlePlay = () => setIsPlaying(true);
@@ -269,6 +298,7 @@ export default function VideoPlayer({
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const bufferedPercent = duration > 0 ? (buffered / duration) * 100 : 0;
 
   // No MP4 source available
   if (!mp4Source) {
@@ -278,16 +308,17 @@ export default function VideoPlayer({
       </div>
     );
   }
+
   return (
     <div
       ref={containerRef}
-      className="aspect-video bg-black rounded-xl overflow-hidden mb-6 relative group select-none"
+      className="relative aspect-video bg-black rounded-xl overflow-hidden mb-6 group select-none"
       tabIndex={-1}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => isPlaying && setShowControls(false)}
       onKeyDown={handleKeyDown}
     >
-      {/* Video element */}
+      {/* ═══ Video element ═══ */}
       <video
         ref={videoRef}
         key={currentSrc}
@@ -299,6 +330,7 @@ export default function VideoPlayer({
         onPlay={handlePlay}
         onPause={handlePause}
         onTimeUpdate={handleTimeUpdate}
+        onProgress={handleProgress}
         onLoadedMetadata={handleLoadedMetadata}
         onCanPlay={handleCanPlay}
         onError={handleError}
@@ -308,15 +340,13 @@ export default function VideoPlayer({
         Your browser does not support HTML5 video.
       </video>
 
-      {/* === OVERLAYS === */}
-
-      {/* Big center play button (when paused) */}
+      {/* ═══ Big center play button (paused) ═══ */}
       {!isPlaying && !isLoading && !hasError && (
         <div
           className="absolute inset-0 flex items-center justify-center cursor-pointer"
           onClick={togglePlay}
         >
-          <div className="w-16 h-16 rounded-full bg-red-600/90 flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg shadow-black/50">
+          <div className="w-16 h-16 rounded-full bg-red-600/90 flex items-center justify-center hover:bg-red-600 hover:scale-105 transition-all duration-200 shadow-lg shadow-black/50">
             <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
@@ -324,64 +354,58 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* Loading spinner */}
+      {/* ═══ Loading spinner ═══ */}
       {(isLoading || isRefreshing) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-          <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-[3px] border-red-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
-      {/* Error overlay */}
+      {/* ═══ Error overlay ═══ */}
       {hasError && !isRefreshing && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-3 z-10">
+          <svg className="w-12 h-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
           <p className="text-sm text-gray-400">Video source expired or unavailable</p>
           <div className="flex gap-2">
-            <button onClick={retryMp4} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white transition-colors">Retry</button>
+            <button onClick={retryMp4} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white transition-colors">
+              Retry
+            </button>
             {videoUrl && (
-              <button onClick={refreshUrls} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-xs text-white transition-colors">Refresh link</button>
+              <button onClick={refreshUrls} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-xs text-white transition-colors">
+                Refresh link
+              </button>
             )}
-
           </div>
         </div>
       )}
 
-      {/* === CUSTOM CONTROL BAR === */}
+      {/* ═══ CUSTOM CONTROL BAR ═══ */}
       <div
         className={`absolute bottom-0 left-0 right-0 transition-opacity duration-300 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* Gradient background */}
-        <div className="bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-12 px-4 pb-3">
-          {/* Progress bar */}
-          <div
-            className="w-full h-1 bg-gray-600/50 rounded-full cursor-pointer mb-3 group/progress hover:h-1.5 transition-all"
-            role="progressbar"
-            aria-valuenow={Math.round(currentTime)}
-            aria-valuemin={0}
-            aria-valuemax={Math.round(duration)}
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                e.preventDefault();
-                const step = e.key === 'ArrowRight' ? 5 : -5;
-                if (videoRef.current) videoRef.current.currentTime += step;
-              }
-            }}
-            onClick={handleSeek}
-          >
-            <div
-              className="h-full bg-red-500 rounded-full relative transition-all"
-              style={{ width: `${progress}%` }}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity shadow-md" />
+        <div className="bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-12 px-3 pb-2 sm:px-4 sm:pb-3">
+          {/* ── Progress bar ── */}
+          <div className="relative mb-2 sm:mb-3 group/progress cursor-pointer" onClick={handleSeek}>
+            <div className="absolute top-1/2 -translate-y-1/2 w-full h-1 bg-gray-600/30 rounded-full overflow-hidden">
+              <div className="h-full bg-gray-500/40 rounded-full transition-all" style={{ width: `${bufferedPercent}%` }} />
+            </div>
+            <div className="relative h-1 group-hover/progress:h-1.5 transition-all duration-150">
+              <div className="w-full h-full bg-gray-600/50 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 rounded-full relative transition-all" style={{ width: `${progress}%` }}>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity shadow-md scale-0 group-hover/progress:scale-100" />
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Controls row */}
-          <div className="flex items-center gap-2 text-white">
-            {/* Play/Pause */}
-            <button onClick={togglePlay} className="p-1 hover:text-red-400 transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
+          {/* ── Controls row ── */}
+          <div className="flex items-center gap-1.5 sm:gap-2 text-white">
+            {/* Play / Pause */}
+            <button onClick={togglePlay} className="p-1.5 hover:text-red-400 transition-colors" title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}>
               {isPlaying ? (
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
               ) : (
@@ -390,38 +414,56 @@ export default function VideoPlayer({
             </button>
 
             {/* Time */}
-            <span className="text-xs text-gray-300 tabular-nums min-w-[90px]">
+            <span className="text-xs text-gray-300 tabular-nums min-w-[90px] font-medium">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
             {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Volume - hide slider trigger on mobile */}
+            {/* Volume - animated slider */}
             <div
               className="hidden sm:flex relative items-center"
-              onMouseEnter={() => { clearTimeout(volumeTimeout.current!); setShowVolumeSlider(true); }}
+              onMouseEnter={() => { if (volumeTimeout.current) clearTimeout(volumeTimeout.current); setShowVolumeSlider(true); }}
               onMouseLeave={() => { volumeTimeout.current = setTimeout(() => setShowVolumeSlider(false), 300); }}
             >
-              <button onClick={toggleMute} className="p-1 hover:text-red-400 transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
+              <button onClick={toggleMute} className="p-1.5 hover:text-red-400 transition-colors" title={isMuted ? 'Unmute (M)' : 'Mute (M)'}>
                 {isMuted || volume === 0 ? (
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" /></svg>
+                ) : volume < 0.5 ? (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM3 9v6h4l5 5V4L7 9H3zm13.5 0c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" /></svg>
                 ) : (
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" /></svg>
                 )}
               </button>
-              {showVolumeSlider && (
-                <div className="ml-1 w-20">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={isMuted ? 0 : volume}
-                    onChange={handleVolumeChange}
-                    className="w-full h-1 accent-red-500 cursor-pointer"
-                  />
-                </div>
+              <div className={`ml-1 w-0 overflow-hidden transition-all duration-200 ${showVolumeSlider ? 'w-20' : 'w-0'}`}>
+                <input type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume} onChange={handleVolumeChange} className="w-full h-1 accent-red-500 cursor-pointer" aria-label="Volume" />
+              </div>
+            </div>
+
+            {/* Speed control */}
+            <div className="relative">
+              <button onClick={() => setShowSpeedMenu(!showSpeedMenu)} className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors hidden sm:inline-flex items-center gap-1" title="Speed">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {playbackRate}x
+              </button>
+              {showSpeedMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowSpeedMenu(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-20 overflow-hidden min-w-[80px]">
+                    {speeds.map((speed) => (
+                      <button
+                        key={speed}
+                        onClick={() => { setPlaybackRate(speed); if (videoRef.current) videoRef.current.playbackRate = speed; setShowSpeedMenu(false); }}
+                        className={`block w-full text-left px-3 py-2 text-xs transition-colors ${playbackRate === speed ? 'bg-red-600/20 text-red-400' : 'text-gray-300 hover:bg-gray-800'}`}
+                      >
+                        {speed}x {playbackRate === speed && '✓'}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
@@ -430,7 +472,7 @@ export default function VideoPlayer({
               <div className="relative">
                 <button
                   onClick={() => setShowQualityMenu(!showQualityMenu)}
-                  className="px-2 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors"
+                  className="px-1.5 py-1 rounded text-xs font-medium bg-gray-800/70 hover:bg-gray-700/70 transition-colors"
                   title="Quality"
                 >
                   {currentQuality === 'high' ? 'HD' : 'SD'} ▾
@@ -459,21 +501,32 @@ export default function VideoPlayer({
               </div>
             )}
 
-            {/* Picture-in-Picture - hide on mobile */}
+            {/* Picture-in-Picture */}
             {pipSupported && (
-              <button onClick={togglePiP} className="hidden sm:inline-flex p-1 hover:text-red-400 transition-colors" title="Picture in Picture">
+              <button onClick={togglePiP} className="hidden sm:inline-flex p-1.5 hover:text-red-400 transition-colors" title="Picture in Picture">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 1.98 2 1.98h18c1.1 0 2-.88 2-1.98V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z" /></svg>
               </button>
             )}
 
             {/* Fullscreen */}
-            <button onClick={toggleFullscreen} className="p-1 hover:text-red-400 transition-colors" title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+            <button onClick={toggleFullscreen} className="p-1.5 hover:text-red-400 transition-colors" title={isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)'}>
               {isFullscreen ? (
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" /></svg>
               ) : (
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" /></svg>
               )}
             </button>
+          </div>
+
+          {/* Keyboard shortcuts hint */}
+          <div className="hidden sm:block mt-1">
+            <div className="flex items-center gap-3 text-[10px] text-gray-500/60">
+              <span><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">Space</kbd> Play</span>
+              <span><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">←</kbd><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">→</kbd> Seek</span>
+              <span><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">F</kbd> Fullscreen</span>
+              <span><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">M</kbd> Mute</span>
+              <span><kbd className="px-1 py-0.5 bg-white/5 rounded text-gray-400">{'>'}</kbd> Speed up</span>
+            </div>
           </div>
         </div>
       </div>
